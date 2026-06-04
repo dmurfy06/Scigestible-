@@ -16,6 +16,7 @@ import {
   MethodsTab,
   LimitationsTab,
   GlossaryTab,
+  CitationTab,
 } from '@/components/AnalysisTabs';
 import { NotesTab } from '@/components/NotesTab';
 import { useAppStore } from '@/lib/store';
@@ -237,6 +238,7 @@ export default function Home() {
                 <TabsTrigger value="methods">Methods</TabsTrigger>
                 <TabsTrigger value="limitations">Limitations</TabsTrigger>
                 <TabsTrigger value="glossary">Glossary</TabsTrigger>
+                <TabsTrigger value="references">References</TabsTrigger>
                 <TabsTrigger value="notes">Notes</TabsTrigger>
               </TabsList>
 
@@ -257,6 +259,9 @@ export default function Home() {
               </TabsContent>
               <TabsContent value="glossary">
                 <GlossaryTab analysis={currentPaper.analysis} />
+              </TabsContent>
+              <TabsContent value="references">
+                <CitationTab analysis={currentPaper.analysis} />
               </TabsContent>
               <TabsContent value="notes">
                 <NotesTab

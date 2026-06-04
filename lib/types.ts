@@ -23,6 +23,19 @@ export interface GlossaryTerm {
   definition: string;
 }
 
+export interface CitationData {
+  authors: string[];
+  year: string;
+  title: string;
+  journal: string;
+  volume?: string;
+  issue?: string;
+  pages?: string;
+  doi?: string;
+  publisher?: string;
+  placeOfPublication?: string;
+}
+
 export interface PaperAnalysis {
   studyObjective: StudyObjective;
   plainEnglishSummary: PlainEnglishSummary;
@@ -30,6 +43,7 @@ export interface PaperAnalysis {
   methodsOverview: MethodsOverview;
   limitations: Limitation[];
   glossary: GlossaryTerm[];
+  citationData?: CitationData;
 }
 
 export interface Note {

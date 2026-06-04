@@ -60,7 +60,19 @@ Return ONLY a JSON object with this exact structure (no extra keys, no markdown)
   ],
   "glossary": [
     { "term": "Term", "definition": "definition" }
-  ]
+  ],
+  "citationData": {
+    "authors": ["Lastname, Firstname Middlename", "Lastname, Firstname"],
+    "year": "2023",
+    "title": "Full title of the paper exactly as it appears",
+    "journal": "Full journal or conference name",
+    "volume": "15",
+    "issue": "3",
+    "pages": "123-145",
+    "doi": "10.1234/example.2023.001",
+    "publisher": null,
+    "placeOfPublication": null
+  }
 }
 
 Field-by-field instructions:
@@ -92,7 +104,17 @@ limitations (3–5 items):
 
 glossary (5–12 terms):
 - Only include terms that actually appear in this paper.
-- Definitions must be one or two plain sentences that would make sense to someone who just heard the term for the first time.`,
+- Definitions must be one or two plain sentences that would make sense to someone who just heard the term for the first time.
+
+citationData:
+- Extract from the paper's header, title page, or references section.
+- authors: list each author as "Lastname, Firstname Middlename" (full names, not initials, if available). If only initials appear in the paper, use those (e.g. "Smith, J. D.").
+- year: four-digit publication year. If not found, use "n.d."
+- title: exact full title of this paper as it appears in the document.
+- journal: full journal name, conference name, or book title. Use null if a book chapter and put the book title in publisher instead.
+- volume, issue, pages: as they appear. Use null if not found.
+- doi: the DOI string only (no "https://doi.org/" prefix). Use null if not found.
+- publisher, placeOfPublication: only for books/reports. Use null for journal articles.`,
       },
     ],
   });
