@@ -19,6 +19,7 @@ import {
   CitationTab,
 } from '@/components/AnalysisTabs';
 import { NotesTab } from '@/components/NotesTab';
+import { AskTab } from '@/components/AskTab';
 import { useAppStore } from '@/lib/store';
 import { extractTextFromPDF } from '@/lib/pdf-extractor';
 import { Paper } from '@/lib/types';
@@ -241,6 +242,7 @@ export default function Home() {
                 <TabsTrigger value="limitations">Limitations</TabsTrigger>
                 <TabsTrigger value="glossary">Glossary</TabsTrigger>
                 <TabsTrigger value="references">References</TabsTrigger>
+                <TabsTrigger value="ask">Ask</TabsTrigger>
                 <TabsTrigger value="notes">Notes</TabsTrigger>
               </TabsList>
 
@@ -264,6 +266,9 @@ export default function Home() {
               </TabsContent>
               <TabsContent value="references">
                 <CitationTab analysis={currentPaper.analysis} />
+              </TabsContent>
+              <TabsContent value="ask">
+                <AskTab analysis={currentPaper.analysis} />
               </TabsContent>
               <TabsContent value="notes">
                 <NotesTab
