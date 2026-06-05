@@ -55,12 +55,19 @@ export interface Note {
   updatedAt: number;
 }
 
+export interface Folder {
+  id: string;
+  name: string;
+  createdAt: number;
+}
+
 export interface Paper {
   id: string;
   filename: string;
   customName?: string;
   pdfPath?: string;
   pdfUrl?: string;
+  folderId?: string;
   analysis: PaperAnalysis;
   uploadedAt: number;
 }

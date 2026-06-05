@@ -24,13 +24,14 @@ import { NotesTab } from '@/components/NotesTab';
 import { AskTab } from '@/components/AskTab';
 import { useAppStore } from '@/lib/store';
 import { extractTextFromPDF } from '@/lib/pdf-extractor';
-import { Paper } from '@/lib/types';
+import { Paper, Folder } from '@/lib/types';
 import { AlertCircle, Loader, Upload, PanelLeft, Menu } from 'lucide-react';
 
 export default function Home() {
   const [user, setUser] = useState<User | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [papers, setPapers] = useState<Paper[]>([]);
+  const [folders, setFolders] = useState<Folder[]>([]);
   const [papersLoading, setPapersLoading] = useState(false);
   const [showUpload, setShowUpload] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -67,30 +68,37 @@ export default function Home() {
     }
 
     setPapersLoading(true);
-    supabase
-      .from('papers')
-      .select('*')
-      .order('uploaded_at', { ascending: false })
-      .then(({ data }) => {
-        if (data) {
-          const mapped: Paper[] = data.map((row) => ({
-            id: row.id,
-            filename: row.filename,
-            customName: row.custom_name ?? undefined,
-            pdfPath: row.pdf_path ?? undefined,
-            analysis: row.analysis,
-            uploadedAt: new Date(row.uploaded_at).getTime(),
-          }));
-          setPapers(mapped);
-          if (mapped.length > 0) {
-            setCurrentPaper(mapped[0]);
-            loadNotesForPaper(mapped[0].id);
-          } else {
-            setShowUpload(true);
-          }
+    Promise.all([
+      supabase.from('papers').select('*').order('uploaded_at', { ascending: false }),
+      supabase.from('folders').select('*').order('created_at', { ascending: true }),
+    ]).then(([{ data: papersData }, { data: foldersData }]) => {
+      if (foldersData) {
+        setFolders(foldersData.map((row) => ({
+          id: row.id,
+          name: row.name,
+          createdAt: new Date(row.created_at).getTime(),
+        })));
+      }
+      if (papersData) {
+        const mapped: Paper[] = papersData.map((row) => ({
+          id: row.id,
+          filename: row.filename,
+          customName: row.custom_name ?? undefined,
+          pdfPath: row.pdf_path ?? undefined,
+          folderId: row.folder_id ?? undefined,
+          analysis: row.analysis,
+          uploadedAt: new Date(row.uploaded_at).getTime(),
+        }));
+        setPapers(mapped);
+        if (mapped.length > 0) {
+          setCurrentPaper(mapped[0]);
+          loadNotesForPaper(mapped[0].id);
+        } else {
+          setShowUpload(true);
         }
-        setPapersLoading(false);
-      });
+      }
+      setPapersLoading(false);
+    });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
@@ -98,6 +106,7 @@ export default function Home() {
     await supabase.auth.signOut();
     setCurrentPaper(null);
     setPapers([]);
+    setFolders([]);
     setShowUpload(false);
   };
 
@@ -146,6 +155,51 @@ export default function Home() {
         setShowUpload(true);
       }
       setPdfPanelOpen(false);
+    }
+  };
+
+  const handleCreateFolder = async (name: string): Promise<Folder | null> => {
+    const res = await fetch('/api/folders', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name }),
+    });
+    if (!res.ok) return null;
+    const row = await res.json();
+    const folder: Folder = { id: row.id, name: row.name, createdAt: new Date(row.created_at).getTime() };
+    setFolders((prev) => [...prev, folder]);
+    return folder;
+  };
+
+  const handleRenameFolder = async (folderId: string, newName: string) => {
+    await fetch(`/api/folders/${folderId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: newName }),
+    });
+    setFolders((prev) => prev.map((f) => (f.id === folderId ? { ...f, name: newName } : f)));
+  };
+
+  const handleDeleteFolder = async (folderId: string) => {
+    await fetch(`/api/folders/${folderId}`, { method: 'DELETE' });
+    setFolders((prev) => prev.filter((f) => f.id !== folderId));
+    // Papers in the folder become uncategorized in local state
+    setPapers((prev) => prev.map((p) => (p.folderId === folderId ? { ...p, folderId: undefined } : p)));
+    if (currentPaper?.folderId === folderId) {
+      setCurrentPaper({ ...currentPaper, folderId: undefined });
+    }
+  };
+
+  const handleMoveToFolder = async (paperId: string, folderId: string | null) => {
+    await fetch(`/api/papers/${paperId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ folderId }),
+    });
+    const updated = folderId ?? undefined;
+    setPapers((prev) => prev.map((p) => (p.id === paperId ? { ...p, folderId: updated } : p)));
+    if (currentPaper?.id === paperId) {
+      setCurrentPaper({ ...currentPaper, folderId: updated });
     }
   };
 
@@ -254,6 +308,7 @@ export default function Home() {
       <Sidebar
         user={user}
         papers={papers}
+        folders={folders}
         currentPaperId={currentPaper?.id ?? null}
         loading={papersLoading}
         onSelectPaper={handleSelectPaper}
@@ -261,6 +316,10 @@ export default function Home() {
         onSignOut={handleSignOut}
         onRenamePaper={handleRenamePaper}
         onDeletePaper={handleDeletePaper}
+        onCreateFolder={handleCreateFolder}
+        onRenameFolder={handleRenameFolder}
+        onDeleteFolder={handleDeleteFolder}
+        onMoveToFolder={handleMoveToFolder}
         mobileOpen={sidebarMobileOpen}
         onMobileClose={() => setSidebarMobileOpen(false)}
       />

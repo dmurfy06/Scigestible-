@@ -13,15 +13,19 @@ export async function PATCH(
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const { customName } = await request.json();
+  const body = await request.json();
 
-  if (typeof customName !== 'string') {
-    return NextResponse.json({ error: 'customName must be a string' }, { status: 400 });
+  const update: Record<string, unknown> = {};
+  if ('customName' in body) update.custom_name = typeof body.customName === 'string' ? body.customName.trim() || null : null;
+  if ('folderId' in body) update.folder_id = body.folderId ?? null;
+
+  if (Object.keys(update).length === 0) {
+    return NextResponse.json({ error: 'Nothing to update' }, { status: 400 });
   }
 
   const { error } = await supabase
     .from('papers')
-    .update({ custom_name: customName.trim() || null })
+    .update(update)
     .eq('id', id)
     .eq('user_id', user.id);
 
