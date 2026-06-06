@@ -1,10 +1,30 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import {
   Search, Plus, LogOut, FileText, Sun, Moon, Pencil, Trash2, Check, X,
-  ChevronDown, ChevronRight, FolderOpen, FolderPlus, Folder,
+  ChevronDown, ChevronRight, FolderOpen, FolderPlus, Folder, GripVertical,
 } from 'lucide-react';
+import {
+  DndContext,
+  DragOverlay,
+  PointerSensor,
+  TouchSensor,
+  useSensor,
+  useSensors,
+  closestCenter,
+  useDroppable,
+  type DragStartEvent,
+  type DragOverEvent,
+  type DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  SortableContext,
+  useSortable,
+  verticalListSortingStrategy,
+  arrayMove,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import { Logo } from '@/components/Logo';
 import type { User } from '@supabase/supabase-js';
 import { Paper, Folder as FolderType } from '@/lib/types';
@@ -89,6 +109,48 @@ function InlineInput({
   );
 }
 
+function DroppableFolderHeader({ folderId, isOver, children }: { folderId: string; isOver: boolean; children: React.ReactNode }) {
+  const { setNodeRef } = useDroppable({ id: `folder-drop-${folderId}` });
+  return (
+    <div
+      ref={setNodeRef}
+      className={`rounded-xl transition-all duration-150 ${isOver ? 'bg-blue-500/10 ring-1 ring-inset ring-blue-500/30' : ''}`}
+    >
+      {children}
+    </div>
+  );
+}
+
+function DroppableUncategorized({ isOver, children }: { isOver: boolean; children: React.ReactNode }) {
+  const { setNodeRef } = useDroppable({ id: 'uncategorized' });
+  return (
+    <div
+      ref={setNodeRef}
+      className={`rounded-xl transition-all duration-150 ${isOver ? 'bg-slate-800/40 ring-1 ring-inset ring-white/10' : ''}`}
+    >
+      {children}
+    </div>
+  );
+}
+
+function SortablePaperWrapper({
+  paperId,
+  children,
+}: {
+  paperId: string;
+  children: (props: { isDragging: boolean; handleProps: React.HTMLAttributes<HTMLElement> }) => React.ReactNode;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: paperId });
+  return (
+    <div
+      ref={setNodeRef}
+      style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.35 : 1 }}
+    >
+      {children({ isDragging, handleProps: { ...attributes, ...listeners } })}
+    </div>
+  );
+}
+
 export function Sidebar({
   user,
   papers,
@@ -108,23 +170,115 @@ export function Sidebar({
   onMobileClose,
 }: SidebarProps) {
   const [search, setSearch] = useState('');
-  // Paper actions
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [moveMenuPaperId, setMoveMenuPaperId] = useState<string | null>(null);
-  // Folder actions
   const [collapsedFolders, setCollapsedFolders] = useState<Set<string>>(new Set());
   const [renamingFolderId, setRenamingFolderId] = useState<string | null>(null);
   const [confirmDeleteFolderId, setConfirmDeleteFolderId] = useState<string | null>(null);
   const [deletingFolderId, setDeletingFolderId] = useState<string | null>(null);
   const [creatingFolder, setCreatingFolder] = useState(false);
 
+  const [paperOrder, setPaperOrder] = useState<string[]>(() => {
+    if (typeof window === 'undefined') return [];
+    try {
+      const saved = localStorage.getItem(`scigestible_paper_order_${user.id}`);
+      return saved ? JSON.parse(saved) : [];
+    } catch { return []; }
+  });
+  const [activeDragId, setActiveDragId] = useState<string | null>(null);
+  const [dragOverFolderId, setDragOverFolderId] = useState<string | null>(null);
+
   const { theme, toggle } = useTheme();
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 5 } })
+  );
 
   const filtered = papers.filter((p) =>
     getPaperDisplayName(p).toLowerCase().includes(search.toLowerCase())
   );
+
+  const updateOrder = useCallback((newOrder: string[]) => {
+    setPaperOrder(newOrder);
+    try {
+      localStorage.setItem(`scigestible_paper_order_${user.id}`, JSON.stringify(newOrder));
+    } catch {}
+  }, [user.id]);
+
+  const getSortedPapers = useCallback((papersToSort: Paper[]) => {
+    if (paperOrder.length === 0) return papersToSort;
+    const orderMap = new Map(paperOrder.map((id, idx) => [id, idx]));
+    const ordered = papersToSort
+      .filter((p) => orderMap.has(p.id))
+      .sort((a, b) => orderMap.get(a.id)! - orderMap.get(b.id)!);
+    const unordered = papersToSort
+      .filter((p) => !orderMap.has(p.id))
+      .sort((a, b) => b.uploadedAt - a.uploadedAt);
+    return [...unordered, ...ordered];
+  }, [paperOrder]);
+
+  const handleDragStart = (event: DragStartEvent) => {
+    setActiveDragId(String(event.active.id));
+  };
+
+  const handleDragOver = (event: DragOverEvent) => {
+    const { over } = event;
+    if (!over) { setDragOverFolderId(null); return; }
+    const overId = String(over.id);
+    if (overId.startsWith('folder-drop-')) {
+      setDragOverFolderId(overId.slice('folder-drop-'.length));
+    } else if (overId === 'uncategorized') {
+      setDragOverFolderId('uncategorized');
+    } else {
+      const overPaper = papers.find((p) => p.id === overId);
+      setDragOverFolderId(overPaper ? (overPaper.folderId ?? 'uncategorized') : null);
+    }
+  };
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    setActiveDragId(null);
+    setDragOverFolderId(null);
+    if (!over) return;
+
+    const activeId = String(active.id);
+    const overId = String(over.id);
+    const activePaper = papers.find((p) => p.id === activeId);
+    if (!activePaper) return;
+
+    if (overId.startsWith('folder-drop-')) {
+      const targetFolderId = overId.slice('folder-drop-'.length);
+      if (activePaper.folderId !== targetFolderId) {
+        onMoveToFolder(activeId, targetFolderId);
+      }
+      return;
+    }
+
+    if (overId === 'uncategorized') {
+      if (activePaper.folderId) onMoveToFolder(activeId, null);
+      return;
+    }
+
+    if (activeId === overId) return;
+    const overPaper = papers.find((p) => p.id === overId);
+    if (!overPaper) return;
+
+    if (activePaper.folderId !== overPaper.folderId) {
+      onMoveToFolder(activeId, overPaper.folderId ?? null);
+    }
+
+    const baseOrder = paperOrder.length > 0 ? paperOrder : papers.map((p) => p.id);
+    const oldIdx = baseOrder.indexOf(activeId);
+    const newIdx = baseOrder.indexOf(overId);
+    if (oldIdx !== -1 && newIdx !== -1 && oldIdx !== newIdx) {
+      updateOrder(arrayMove(baseOrder, oldIdx, newIdx));
+    }
+  };
+
+  const activePaper = activeDragId ? papers.find((p) => p.id === activeDragId) : null;
 
   const handleRename = async (paperId: string, newName: string) => {
     setRenamingId(null);
@@ -154,8 +308,7 @@ export function Sidebar({
     });
   };
 
-  // Render a single paper row (used both inside folders and in uncategorized)
-  const renderPaper = (paper: Paper) => {
+  const renderPaperContent = (paper: Paper, handleProps?: React.HTMLAttributes<HTMLElement>) => {
     const active = paper.id === currentPaperId;
     const isRenaming = renamingId === paper.id;
     const isConfirmingDelete = confirmDeleteId === paper.id;
@@ -163,7 +316,7 @@ export function Sidebar({
     const isMoveOpen = moveMenuPaperId === paper.id;
 
     return (
-      <div key={paper.id}>
+      <div>
         <div
           role="button"
           tabIndex={0}
@@ -180,7 +333,16 @@ export function Sidebar({
               : 'text-slate-500 hover:bg-white/[0.05] hover:text-slate-300'
           } ${isDeleting ? 'opacity-40 pointer-events-none' : ''}`}
         >
-          <div className="flex items-start gap-2.5">
+          <div className="flex items-start gap-2">
+            {handleProps && (
+              <span
+                {...handleProps}
+                onClick={(e) => e.stopPropagation()}
+                className="opacity-0 group-hover:opacity-100 cursor-grab active:cursor-grabbing self-center flex-shrink-0 text-slate-600 hover:text-slate-400 touch-none -ml-0.5"
+              >
+                <GripVertical size={12} />
+              </span>
+            )}
             <FileText
               size={12}
               className={`mt-0.5 flex-shrink-0 ${active ? 'text-slate-500' : 'text-slate-600 group-hover:text-slate-500'}`}
@@ -230,7 +392,6 @@ export function Sidebar({
           </div>
         </div>
 
-        {/* Move to folder picker */}
         {isMoveOpen && (
           <div className="mx-1 mb-1 px-2 py-1.5 bg-[#13131f] border border-white/[0.07] rounded-xl">
             <p className="text-xs text-slate-500 mb-1 px-1">Move to folder</p>
@@ -264,7 +425,6 @@ export function Sidebar({
           </div>
         )}
 
-        {/* Inline delete confirm */}
         {isConfirmingDelete && (
           <div className="mx-1 mb-1 px-3 py-2 bg-red-950/60 border border-red-800/50 rounded-xl flex items-center justify-between gap-2">
             <p className="text-xs text-red-300">Delete this paper?</p>
@@ -290,7 +450,6 @@ export function Sidebar({
     );
   };
 
-  // When searching, show a flat list with no folder grouping
   const showFlat = search.length > 0;
 
   return (
@@ -303,7 +462,6 @@ export function Sidebar({
       )}
       <div className={`w-64 flex-shrink-0 flex flex-col h-screen overflow-hidden bg-slate-950 border-r border-white/[0.06] fixed inset-y-0 left-0 z-50 transition-transform duration-300 ease-in-out md:relative md:translate-x-0 ${mobileOpen ? 'translate-x-0' : '-translate-x-full'}`}>
 
-        {/* Logo */}
         <div className="px-4 pt-5 pb-4 flex items-center justify-between">
           <Logo wordmarkClass="text-white" />
           <button
@@ -314,7 +472,6 @@ export function Sidebar({
           </button>
         </div>
 
-        {/* New Paper button */}
         <div className="px-3 pb-3">
           <button
             onClick={onNewPaper}
@@ -325,7 +482,6 @@ export function Sidebar({
           </button>
         </div>
 
-        {/* Search */}
         <div className="px-3 pb-3">
           <div className="relative">
             <Search
@@ -342,7 +498,6 @@ export function Sidebar({
           </div>
         </div>
 
-        {/* Papers list */}
         <div className="flex-1 overflow-y-auto px-2 pb-2">
           {loading ? (
             <div className="space-y-1 px-1 pt-1">
@@ -354,14 +509,13 @@ export function Sidebar({
               ))}
             </div>
           ) : showFlat ? (
-            // Flat search results
             <div className="space-y-0.5">
               {filtered.length === 0 ? (
                 <p className="text-center text-slate-600 text-xs py-10 px-4 leading-relaxed">
                   No results for &ldquo;{search}&rdquo;
                 </p>
               ) : (
-                filtered.map((paper) => renderPaper(paper))
+                filtered.map((paper) => <div key={paper.id}>{renderPaperContent(paper)}</div>)
               )}
             </div>
           ) : papers.length === 0 ? (
@@ -369,119 +523,152 @@ export function Sidebar({
               No papers yet — upload your first!
             </p>
           ) : (
-            // Grouped by folder
-            <div className="space-y-1">
-              {folders.map((folder) => {
-                const folderPapers = papers.filter((p) => p.folderId === folder.id);
-                const isCollapsed = collapsedFolders.has(folder.id);
-                const isRenamingFolder = renamingFolderId === folder.id;
-                const isConfirmingDeleteFolder = confirmDeleteFolderId === folder.id;
-                const isDeletingFolder = deletingFolderId === folder.id;
+            <DndContext
+              sensors={sensors}
+              collisionDetection={closestCenter}
+              onDragStart={handleDragStart}
+              onDragOver={handleDragOver}
+              onDragEnd={handleDragEnd}
+            >
+              <div className="space-y-1">
+                {folders.map((folder) => {
+                  const folderPapers = getSortedPapers(papers.filter((p) => p.folderId === folder.id));
+                  const isCollapsed = collapsedFolders.has(folder.id);
+                  const isRenamingFolder = renamingFolderId === folder.id;
+                  const isConfirmingDeleteFolder = confirmDeleteFolderId === folder.id;
+                  const isDeletingFolder = deletingFolderId === folder.id;
 
-                return (
-                  <div key={folder.id} className={isDeletingFolder ? 'opacity-40 pointer-events-none' : ''}>
-                    {/* Folder header */}
-                    <div className="flex items-center gap-1 px-2 py-1 group/folder">
-                      <button
-                        onClick={() => toggleCollapse(folder.id)}
-                        className="text-slate-600 hover:text-slate-400 transition-colors flex-shrink-0"
-                      >
-                        {isCollapsed
-                          ? <ChevronRight size={12} />
-                          : <ChevronDown size={12} />}
-                      </button>
-                      {isRenamingFolder ? (
-                        <InlineInput
-                          initialValue={folder.name}
-                          onSave={(name) => { setRenamingFolderId(null); onRenameFolder(folder.id, name); }}
-                          onCancel={() => setRenamingFolderId(null)}
-                          className="flex-1 min-w-0"
-                        />
-                      ) : (
-                        <>
-                          <span className="text-xs font-medium text-slate-400 truncate flex-1 min-w-0">
-                            {folder.name}
-                          </span>
-                          <span className="text-xs text-slate-600 flex-shrink-0">{folderPapers.length}</span>
-                          <div className="flex items-center gap-0.5 opacity-0 group-hover/folder:opacity-100 transition-opacity flex-shrink-0 ml-0.5">
+                  return (
+                    <div key={folder.id} className={isDeletingFolder ? 'opacity-40 pointer-events-none' : ''}>
+                      <DroppableFolderHeader folderId={folder.id} isOver={dragOverFolderId === folder.id}>
+                        <div className="flex items-center gap-1 px-2 py-1 group/folder">
+                          <button
+                            onClick={() => toggleCollapse(folder.id)}
+                            className="text-slate-600 hover:text-slate-400 transition-colors flex-shrink-0"
+                          >
+                            {isCollapsed ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
+                          </button>
+                          {isRenamingFolder ? (
+                            <InlineInput
+                              initialValue={folder.name}
+                              onSave={(name) => { setRenamingFolderId(null); onRenameFolder(folder.id, name); }}
+                              onCancel={() => setRenamingFolderId(null)}
+                              className="flex-1 min-w-0"
+                            />
+                          ) : (
+                            <>
+                              <span className="text-xs font-medium text-slate-400 truncate flex-1 min-w-0">
+                                {folder.name}
+                              </span>
+                              <span className="text-xs text-slate-600 flex-shrink-0">{folderPapers.length}</span>
+                              <div className="flex items-center gap-0.5 opacity-0 group-hover/folder:opacity-100 transition-opacity flex-shrink-0 ml-0.5">
+                                <button
+                                  onClick={() => { setRenamingFolderId(folder.id); setConfirmDeleteFolderId(null); }}
+                                  title="Rename folder"
+                                  className="p-1 rounded text-slate-600 hover:text-slate-300 hover:bg-white/5 transition-all duration-150"
+                                >
+                                  <Pencil size={10} />
+                                </button>
+                                <button
+                                  onClick={() => { setConfirmDeleteFolderId(folder.id); setRenamingFolderId(null); }}
+                                  title="Delete folder"
+                                  className="p-1 rounded text-slate-600 hover:text-red-400 hover:bg-red-500/10 transition-all duration-150"
+                                >
+                                  <Trash2 size={10} />
+                                </button>
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      </DroppableFolderHeader>
+
+                      {isConfirmingDeleteFolder && (
+                        <div className="mx-1 mb-1 px-3 py-2 bg-red-950/60 border border-red-800/50 rounded-xl flex items-center justify-between gap-2">
+                          <p className="text-xs text-red-300 leading-tight">Delete folder? Papers stay.</p>
+                          <div className="flex items-center gap-1 flex-shrink-0">
                             <button
-                              onClick={() => { setRenamingFolderId(folder.id); setConfirmDeleteFolderId(null); }}
-                              title="Rename folder"
-                              className="p-1 rounded text-slate-600 hover:text-slate-300 hover:bg-white/5 transition-all duration-150"
+                              onClick={() => handleDeleteFolder(folder.id)}
+                              className="p-1 rounded text-red-300 hover:text-white hover:bg-red-700 transition-colors"
+                              title="Confirm"
                             >
-                              <Pencil size={10} />
+                              <Check size={12} />
                             </button>
                             <button
-                              onClick={() => { setConfirmDeleteFolderId(folder.id); setRenamingFolderId(null); }}
-                              title="Delete folder"
-                              className="p-1 rounded text-slate-600 hover:text-red-400 hover:bg-red-500/10 transition-all duration-150"
+                              onClick={() => setConfirmDeleteFolderId(null)}
+                              className="p-1 rounded text-slate-400 hover:text-slate-200 hover:bg-slate-700 transition-colors"
+                              title="Cancel"
                             >
-                              <Trash2 size={10} />
+                              <X size={12} />
                             </button>
                           </div>
-                        </>
+                        </div>
+                      )}
+
+                      {!isCollapsed && (
+                        <div className="ml-3 space-y-0.5 border-l border-white/[0.06] pl-1">
+                          {folderPapers.length === 0 ? (
+                            <p className="text-xs text-slate-700 px-3 py-2">Empty folder</p>
+                          ) : (
+                            <SortableContext items={folderPapers.map((p) => p.id)} strategy={verticalListSortingStrategy}>
+                              {folderPapers.map((paper) => (
+                                <SortablePaperWrapper key={paper.id} paperId={paper.id}>
+                                  {({ handleProps }) => renderPaperContent(paper, handleProps)}
+                                </SortablePaperWrapper>
+                              ))}
+                            </SortableContext>
+                          )}
+                        </div>
                       )}
                     </div>
+                  );
+                })}
 
-                    {/* Folder delete confirm */}
-                    {isConfirmingDeleteFolder && (
-                      <div className="mx-1 mb-1 px-3 py-2 bg-red-950/60 border border-red-800/50 rounded-xl flex items-center justify-between gap-2">
-                        <p className="text-xs text-red-300 leading-tight">Delete folder? Papers stay.</p>
-                        <div className="flex items-center gap-1 flex-shrink-0">
-                          <button
-                            onClick={() => handleDeleteFolder(folder.id)}
-                            className="p-1 rounded text-red-300 hover:text-white hover:bg-red-700 transition-colors"
-                            title="Confirm"
-                          >
-                            <Check size={12} />
-                          </button>
-                          <button
-                            onClick={() => setConfirmDeleteFolderId(null)}
-                            className="p-1 rounded text-slate-400 hover:text-slate-200 hover:bg-slate-700 transition-colors"
-                            title="Cancel"
-                          >
-                            <X size={12} />
-                          </button>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Papers inside folder */}
-                    {!isCollapsed && (
-                      <div className="ml-3 space-y-0.5 border-l border-white/[0.06] pl-1">
-                        {folderPapers.length === 0 ? (
-                          <p className="text-xs text-slate-700 px-3 py-2">Empty folder</p>
-                        ) : (
-                          folderPapers.map((paper) => renderPaper(paper))
+                {(() => {
+                  const uncategorized = getSortedPapers(papers.filter((p) => !p.folderId));
+                  if (uncategorized.length === 0) return null;
+                  return (
+                    <DroppableUncategorized isOver={dragOverFolderId === 'uncategorized'}>
+                      <div>
+                        {folders.length > 0 && (
+                          <p className="px-3 pt-2 pb-1 text-xs font-medium text-slate-600 uppercase tracking-wider">
+                            Uncategorized
+                          </p>
                         )}
+                        <SortableContext items={uncategorized.map((p) => p.id)} strategy={verticalListSortingStrategy}>
+                          <div className="space-y-0.5">
+                            {uncategorized.map((paper) => (
+                              <SortablePaperWrapper key={paper.id} paperId={paper.id}>
+                                {({ handleProps }) => renderPaperContent(paper, handleProps)}
+                              </SortablePaperWrapper>
+                            ))}
+                          </div>
+                        </SortableContext>
                       </div>
-                    )}
-                  </div>
-                );
-              })}
+                    </DroppableUncategorized>
+                  );
+                })()}
+              </div>
 
-              {/* Uncategorized papers */}
-              {(() => {
-                const uncategorized = papers.filter((p) => !p.folderId);
-                if (uncategorized.length === 0) return null;
-                return (
-                  <div>
-                    {folders.length > 0 && (
-                      <p className="px-3 pt-2 pb-1 text-xs font-medium text-slate-600 uppercase tracking-wider">
-                        Uncategorized
-                      </p>
-                    )}
-                    <div className="space-y-0.5">
-                      {uncategorized.map((paper) => renderPaper(paper))}
+              <DragOverlay dropAnimation={null}>
+                {activePaper && (
+                  <div className="w-56 bg-slate-900 border border-white/20 rounded-xl px-3 py-2.5 shadow-2xl cursor-grabbing">
+                    <div className="flex items-start gap-2.5">
+                      <GripVertical size={12} className="mt-0.5 flex-shrink-0 text-slate-600" />
+                      <FileText size={12} className="mt-0.5 flex-shrink-0 text-slate-500" />
+                      <div className="min-w-0 flex-1">
+                        <p className="text-xs font-medium truncate leading-snug text-slate-200">
+                          {getPaperDisplayName(activePaper)}
+                        </p>
+                        <p className="text-xs mt-0.5 text-slate-500">{timeAgo(activePaper.uploadedAt)}</p>
+                      </div>
                     </div>
                   </div>
-                );
-              })()}
-            </div>
+                )}
+              </DragOverlay>
+            </DndContext>
           )}
         </div>
 
-        {/* New Folder row */}
         <div className="px-3 pb-2">
           {creatingFolder ? (
             <div className="flex items-center gap-2 px-3 py-2 bg-white/[0.05] rounded-xl border border-white/[0.07]">
@@ -505,7 +692,6 @@ export function Sidebar({
           )}
         </div>
 
-        {/* Footer: theme toggle + user + sign out */}
         <div className="px-3 py-3 border-t border-white/[0.06] space-y-2">
           <button
             onClick={toggle}
