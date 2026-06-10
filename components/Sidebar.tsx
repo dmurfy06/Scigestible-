@@ -3,7 +3,8 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import {
   Search, Plus, LogOut, FileText, Sun, Moon, Pencil, Trash2, Check, X,
-  ChevronDown, ChevronRight, FolderOpen, FolderPlus, Folder, GripVertical, Sparkles, Settings,
+  ChevronDown, ChevronRight, FolderOpen, FolderPlus, Folder, GripVertical, Sparkles, Settings, Info,
+  Upload, Brain, BookOpen, MessageSquare, Zap,
 } from 'lucide-react';
 import {
   DndContext,
@@ -199,6 +200,7 @@ export function Sidebar({
   });
   const [activeDragId, setActiveDragId] = useState<string | null>(null);
   const [dragOverFolderId, setDragOverFolderId] = useState<string | null>(null);
+  const [showAbout, setShowAbout] = useState(false);
 
   const { theme, toggle } = useTheme();
 
@@ -764,6 +766,68 @@ export function Sidebar({
               </>
             )}
           </button>
+
+          <button
+            onClick={() => setShowAbout(true)}
+            className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-slate-500 hover:text-slate-300 hover:bg-white/5 transition-all duration-150 text-xs font-medium"
+          >
+            <Info size={14} className="flex-shrink-0" />
+            <span>About Scigestible</span>
+          </button>
+
+          {showAbout && (
+            <div className="fixed inset-0 z-[100] flex items-center justify-center p-4" onClick={() => setShowAbout(false)}>
+              <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
+              <div
+                className="relative w-full max-w-lg max-h-[90vh] overflow-y-auto bg-slate-900 border border-white/[0.08] rounded-2xl shadow-2xl shadow-black/60 p-7"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <button
+                  onClick={() => setShowAbout(false)}
+                  className="absolute top-4 right-4 p-1.5 text-slate-500 hover:text-slate-300 hover:bg-white/5 rounded-lg transition-all duration-150"
+                >
+                  <X size={15} />
+                </button>
+
+                <div className="flex items-center gap-2.5 mb-5">
+                  <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-blue-500 to-violet-600 flex items-center justify-center">
+                    <Brain size={14} className="text-white" />
+                  </div>
+                  <span className="text-base font-bold text-white">About Scigestible</span>
+                </div>
+
+                <p className="text-sm text-slate-400 leading-relaxed mb-6">
+                  Scigestible is an AI-powered research paper companion. Upload any academic PDF and get a structured, plain-English breakdown in seconds — no more struggling through dense jargon.
+                </p>
+
+                <div className="space-y-3 mb-6">
+                  {[
+                    { icon: <Zap size={13} />, title: 'Instant analysis', body: 'Full structured breakdown in 15–30 seconds after upload.' },
+                    { icon: <Brain size={13} />, title: 'AI summary', body: 'Objectives, key findings, methods, and limitations in plain English.' },
+                    { icon: <BookOpen size={13} />, title: 'Glossary & references', body: 'Technical terms defined, citations formatted automatically.' },
+                    { icon: <MessageSquare size={13} />, title: 'Ask questions', body: 'Chat with the paper to dig deeper into anything you don\'t understand.' },
+                    { icon: <Upload size={13} />, title: 'Works with any PDF', body: 'Google Scholar, PubMed, arXiv, or your university library — just needs selectable text.' },
+                  ].map(({ icon, title, body }) => (
+                    <div key={title} className="flex items-start gap-3">
+                      <div className="flex-shrink-0 w-6 h-6 rounded-lg bg-blue-500/15 text-blue-400 flex items-center justify-center mt-0.5">
+                        {icon}
+                      </div>
+                      <div>
+                        <p className="text-xs font-semibold text-slate-200">{title}</p>
+                        <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">{body}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="rounded-xl border border-white/[0.07] bg-white/[0.03] p-4">
+                  <p className="text-xs font-semibold text-slate-300 mb-2">Free plan includes</p>
+                  <p className="text-xs text-slate-500">10 saved papers · 5 uploads per day · 3 questions per day</p>
+                  <p className="text-xs text-slate-500 mt-1">Upgrade to Pro for unlimited access.</p>
+                </div>
+              </div>
+            </div>
+          )}
 
           <div className="flex items-center gap-2 px-1">
             <div className="w-7 h-7 rounded-full bg-gradient-to-br from-blue-500 to-violet-600 flex items-center justify-center flex-shrink-0">

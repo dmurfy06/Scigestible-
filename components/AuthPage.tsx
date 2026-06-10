@@ -1,12 +1,12 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { createClient } from '@/lib/supabase';
 import { LogoIcon } from '@/components/Logo';
-import { Upload, Sparkles, BookOpen, MessageSquare, FileText, ChevronRight } from 'lucide-react';
+import { Upload, Sparkles, BookOpen, MessageSquare, FileText, ChevronRight, Brain, Zap } from 'lucide-react';
 
 export function AuthPage() {
-  const [mode, setMode] = useState<'login' | 'signup'>('login');
+  const [mode, setMode] = useState<'welcome' | 'login' | 'signup'>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -14,6 +14,22 @@ export function AuthPage() {
   const [message, setMessage] = useState<string | null>(null);
 
   const supabase = createClient();
+
+  useEffect(() => {
+    if (!localStorage.getItem('scigestible-intro-seen')) {
+      setMode('welcome');
+    }
+  }, []);
+
+  const proceedToSignup = () => {
+    localStorage.setItem('scigestible-intro-seen', '1');
+    setMode('signup');
+  };
+
+  const proceedToLogin = () => {
+    localStorage.setItem('scigestible-intro-seen', '1');
+    setMode('login');
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -39,6 +55,104 @@ export function AuthPage() {
 
     setLoading(false);
   };
+
+  if (mode === 'welcome') {
+    return (
+      <div className="min-h-screen bg-slate-950 overflow-y-auto">
+        <div className="fixed inset-0 pointer-events-none overflow-hidden">
+          <div className="absolute -top-56 -right-56 w-[52rem] h-[52rem] bg-blue-600/5 rounded-full blur-3xl" />
+          <div className="absolute -bottom-56 -left-56 w-[52rem] h-[52rem] bg-violet-600/6 rounded-full blur-3xl" />
+          <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-indigo-500/3 rounded-full blur-3xl" />
+        </div>
+
+        <div className="relative flex flex-col items-center px-6 py-16 md:py-24">
+          {/* Logo */}
+          <div className="flex items-center gap-3 mb-10 select-none">
+            <LogoIcon size={40} />
+            <span className="text-2xl font-bold tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-violet-400">
+              Scigestible
+            </span>
+          </div>
+
+          {/* Headline */}
+          <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-white text-center leading-tight mb-5 max-w-3xl">
+            Research papers, made{' '}
+            <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-violet-400">
+              actually readable
+            </span>
+          </h1>
+          <p className="text-slate-400 text-lg md:text-xl text-center max-w-2xl mb-14 leading-relaxed">
+            Upload any academic PDF and get an instant AI-powered breakdown — summary, key findings, methods, glossary, and a Q&amp;A chat. No more wading through dense jargon.
+          </p>
+
+          {/* What it can do */}
+          <div className="w-full max-w-4xl mb-14">
+            <h2 className="text-xs font-semibold uppercase tracking-widest text-slate-600 text-center mb-8">What Scigestible does</h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <InfoCard
+                icon={<Zap size={18} />}
+                title="Instant analysis"
+                description="Upload a PDF and get a full structured breakdown in 15–30 seconds."
+              />
+              <InfoCard
+                icon={<Brain size={18} />}
+                title="AI-generated summary"
+                description="Objectives, key findings, methods, and limitations explained in plain English."
+              />
+              <InfoCard
+                icon={<BookOpen size={18} />}
+                title="Glossary & references"
+                description="Technical terms defined automatically, citations formatted for you."
+              />
+              <InfoCard
+                icon={<MessageSquare size={18} />}
+                title="Ask anything"
+                description="Chat directly with the paper to dig deeper into anything you don't understand."
+              />
+            </div>
+          </div>
+
+          {/* How it works */}
+          <div className="w-full max-w-3xl mb-14">
+            <h2 className="text-xs font-semibold uppercase tracking-widest text-slate-600 text-center mb-8">How it works</h2>
+            <div className="flex flex-col md:flex-row gap-3">
+              {[
+                { step: 1, title: 'Find your paper', body: 'Search Google Scholar, PubMed, or arXiv. Download the PDF — it needs selectable text, not a scanned image.' },
+                { step: 2, title: 'Upload it', body: 'Drag the PDF into Scigestible. Analysis starts immediately — no configuration required.' },
+                { step: 3, title: 'Read & explore', body: 'Browse the structured breakdown, read the glossary, and ask follow-up questions in the chat.' },
+              ].map(({ step, title, body }) => (
+                <div key={step} className="flex-1 rounded-2xl border border-white/[0.07] bg-white/[0.03] p-5">
+                  <div className="w-7 h-7 rounded-full bg-blue-500/20 text-blue-400 text-xs font-bold flex items-center justify-center mb-3">
+                    {step}
+                  </div>
+                  <p className="text-sm font-semibold text-slate-200 mb-1">{title}</p>
+                  <p className="text-xs text-slate-500 leading-relaxed">{body}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* CTAs */}
+          <div className="flex flex-col sm:flex-row gap-3 mb-4">
+            <button
+              onClick={proceedToSignup}
+              className="px-8 py-3 bg-gradient-to-r from-blue-500 to-violet-500 hover:from-blue-400 hover:to-violet-400 text-white rounded-xl font-semibold text-sm transition-all duration-200 shadow-lg shadow-violet-500/20 flex items-center gap-2"
+            >
+              Get Started Free
+              <ChevronRight size={15} />
+            </button>
+            <button
+              onClick={proceedToLogin}
+              className="px-8 py-3 border border-white/[0.1] hover:border-white/[0.2] bg-white/[0.04] hover:bg-white/[0.07] text-slate-300 rounded-xl font-medium text-sm transition-all duration-200"
+            >
+              I already have an account
+            </button>
+          </div>
+          <p className="text-xs text-slate-600">Free plan: 10 papers · 5 uploads/day · 3 questions/day</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-slate-950 overflow-y-auto">
@@ -216,6 +330,18 @@ function Feature({ icon, title, description }: { icon: React.ReactNode; title: s
         <p className="text-sm font-medium text-slate-200">{title}</p>
         <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">{description}</p>
       </div>
+    </div>
+  );
+}
+
+function InfoCard({ icon, title, description }: { icon: React.ReactNode; title: string; description: string }) {
+  return (
+    <div className="rounded-2xl border border-white/[0.07] bg-white/[0.03] p-5">
+      <div className="w-8 h-8 rounded-xl bg-blue-500/15 text-blue-400 flex items-center justify-center mb-3">
+        {icon}
+      </div>
+      <p className="text-sm font-semibold text-slate-200 mb-1">{title}</p>
+      <p className="text-xs text-slate-500 leading-relaxed">{description}</p>
     </div>
   );
 }
