@@ -1,10 +1,9 @@
 'use client';
 
-import { useState, useRef, Fragment } from 'react';
+import { useState, useRef } from 'react';
 import {
   Search, Loader, ExternalLink, Sparkles, AlertCircle, Globe, Quote, Unlock, BookmarkPlus,
 } from 'lucide-react';
-import { AdSlot } from '@/components/AdSlot';
 
 interface SearchResult {
   id: string;
@@ -28,8 +27,6 @@ interface PaperSearchProps {
   // Download the PDF and save it to the library without digesting
   onSave: (file: File) => Promise<void>;
   isBusy: boolean;
-  // Pro users don't see ads
-  isPro: boolean;
 }
 
 function formatAuthors(authors: string[]): string {
@@ -42,7 +39,7 @@ function sanitizeFilename(title: string): string {
   return title.replace(/[^a-zA-Z0-9 \-_]/g, '').replace(/\s+/g, ' ').trim().slice(0, 80) || 'paper';
 }
 
-export function PaperSearch({ onDigest, onSave, isBusy, isPro }: PaperSearchProps) {
+export function PaperSearch({ onDigest, onSave, isBusy }: PaperSearchProps) {
   const [query, setQuery] = useState('');
   const [searching, setSearching] = useState(false);
   const [results, setResults] = useState<SearchResult[] | null>(null);
@@ -161,9 +158,6 @@ export function PaperSearch({ onDigest, onSave, isBusy, isPro }: PaperSearchProp
 
       {results !== null && !searching && (
         <>
-          {results.length > 0 && !isPro && (
-            <AdSlot slot="2222222222" isPro={isPro} className="mb-5" />
-          )}
           <div className="flex items-center justify-between mb-4">
             <p className="text-xs text-slate-500 dark:text-slate-400">
               {results.length === 0
@@ -178,13 +172,9 @@ export function PaperSearch({ onDigest, onSave, isBusy, isPro }: PaperSearchProp
           </div>
 
           <div className="space-y-3">
-            {results.map((result, i) => (
-              <Fragment key={result.id}>
-              {/* In-feed ad after the third result (free users only) */}
-              {i === 3 && !isPro && (
-                <AdSlot slot="1111111111" isPro={isPro} className="my-1" />
-              )}
+            {results.map((result) => (
               <div
+                key={result.id}
                 className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-sm hover:border-slate-300 dark:hover:border-slate-700 transition-colors"
               >
                 <h3 className="text-sm font-semibold text-slate-900 dark:text-white leading-snug mb-1.5">
@@ -271,7 +261,6 @@ export function PaperSearch({ onDigest, onSave, isBusy, isPro }: PaperSearchProp
                   )}
                 </div>
               </div>
-              </Fragment>
             ))}
           </div>
         </>

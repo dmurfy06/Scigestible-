@@ -42,8 +42,8 @@ export async function POST(request: NextRequest) {
       customer: customerId,
       client_reference_id: user.id,
       line_items: [{ price: process.env.STRIPE_PRO_PRICE_ID, quantity: 1 }],
-      success_url: `${origin}?pro=1`,
-      cancel_url: `${origin}?pro=0`,
+      success_url: `${origin}/app?pro=1`,
+      cancel_url: `${origin}/app?pro=0`,
       metadata: { user_id: user.id },
       subscription_data: { metadata: { user_id: user.id } },
     });

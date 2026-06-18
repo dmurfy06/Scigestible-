@@ -27,7 +27,6 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { Logo } from '@/components/Logo';
-import { AdSlot } from '@/components/AdSlot';
 import type { User } from '@supabase/supabase-js';
 import { Paper, Folder as FolderType } from '@/lib/types';
 import { useTheme } from '@/components/ThemeProvider';
@@ -756,9 +755,6 @@ export function Sidebar({
         )}
 
         <div className="px-3 py-3 border-t border-white/[0.06] space-y-2">
-          {/* Display ad — free users only (AdSlot returns null for Pro) */}
-          {!isPro && <AdSlot slot="0000000000" isPro={isPro} />}
-
           {/* Paper count indicator */}
           {paperLimit !== null && (
             <div className="px-3 py-2 rounded-xl bg-white/[0.04] space-y-1.5">

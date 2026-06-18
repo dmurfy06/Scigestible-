@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
+import Script from 'next/script';
 
 // AdSense publisher ID, e.g. "ca-pub-1234567890123456".
 // Set this in your environment (.env.local + Vercel) once AdSense approves you.
@@ -72,17 +73,25 @@ export function AdSlot({
     return null;
   }
 
-  // Classes go on the <ins> itself (not a wrapper) so the global
-  // `[data-ad-status='unfilled'] { display:none }` rule collapses the unit
-  // and its margins entirely when no ad is served.
+  // Script is loaded here (not in root layout) so it only runs on pages with
+  // real publisher content — prevents AdSense flagging login/empty screens.
   return (
-    <ins
-      className={`adsbygoogle block ${className}`}
-      style={{ minHeight: minHeight || undefined }}
-      data-ad-client={ADSENSE_CLIENT}
-      data-ad-slot={slot}
-      data-ad-format={format}
-      data-full-width-responsive={responsive ? 'true' : 'false'}
-    />
+    <>
+      <Script
+        id="adsense-script"
+        async
+        src={`https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${ADSENSE_CLIENT}`}
+        crossOrigin="anonymous"
+        strategy="afterInteractive"
+      />
+      <ins
+        className={`adsbygoogle block ${className}`}
+        style={{ minHeight: minHeight || undefined }}
+        data-ad-client={ADSENSE_CLIENT}
+        data-ad-slot={slot}
+        data-ad-format={format}
+        data-full-width-responsive={responsive ? 'true' : 'false'}
+      />
+    </>
   );
 }
