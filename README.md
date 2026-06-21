@@ -222,9 +222,9 @@ All errors are displayed with helpful, user-friendly messages.
 - Check file size (must be under 25 MB)
 
 ### Notes not saving
-- Check browser localStorage is enabled
-- Verify browser developer tools > Application > Local Storage shows `paperpilot_notes`
-- Try clearing cache and refreshing
+- Make sure you are signed in — notes are saved to your account via the `/api/notes` endpoints
+- Verify the `notes` table exists (run `supabase/migrations/006_notes.sql`)
+- Check the browser network tab for failed `/api/notes` requests
 
 ### Analysis takes a long time
 - This is normal - API analysis typically takes 30-60 seconds

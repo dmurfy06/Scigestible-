@@ -29,7 +29,7 @@ import { AskTab } from '@/components/AskTab';
 import { AdSlot } from '@/components/AdSlot';
 import { useAppStore } from '@/lib/store';
 import { extractTextFromPDF } from '@/lib/pdf-extractor';
-import { Paper, Folder } from '@/lib/types';
+import { Paper, Folder, Note } from '@/lib/types';
 import { AlertCircle, Loader, PanelLeft, Menu, Sparkles, FileText, Library, BookOpen } from 'lucide-react';
 import { LogoIcon } from '@/components/Logo';
 
@@ -60,7 +60,7 @@ export default function Home() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [aboutOpen, setAboutOpen] = useState(false);
 
-  const { currentPaper, setCurrentPaper, notes, addNote, updateNote, deleteNote, loadNotesForPaper } =
+  const { currentPaper, setCurrentPaper, notes, setNotes, addNote, updateNote, deleteNote } =
     useAppStore();
 
   const supabase = createClient();
@@ -93,8 +93,14 @@ export default function Home() {
     if (!user) {
       setPapers([]);
       setCurrentPaper(null);
+      setNotes([]);
       return;
     }
+
+    fetch('/api/notes')
+      .then((r) => (r.ok ? r.json() : []))
+      .then((data) => setNotes(Array.isArray(data) ? data : []))
+      .catch(() => {});
 
     setPapersLoading(true);
     fetch('/api/usage').then((r) => r.json()).then((u) => {
@@ -130,7 +136,6 @@ export default function Home() {
         setPapers(mapped);
         if (mapped.length > 0) {
           setCurrentPaper(mapped[0]);
-          loadNotesForPaper(mapped[0].id);
           setActiveView('library');
         } else {
           setActiveView('digest');
@@ -149,11 +154,40 @@ export default function Home() {
     setActiveView('library');
   };
 
+  // Notes are persisted in Supabase. Create waits for the real row (so the
+  // note gets its server id); edits/deletes update optimistically since they
+  // act on rows that already exist.
+  const handleAddNote = async (note: Note) => {
+    const res = await fetch('/api/notes', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ paperId: note.paperId, title: note.title, content: note.content }),
+    });
+    if (!res.ok) {
+      setAnalyzeError('Could not save the note. Please try again.');
+      return;
+    }
+    addNote(await res.json());
+  };
+
+  const handleUpdateNote = async (id: string, updates: Partial<Note>) => {
+    updateNote(id, updates);
+    await fetch(`/api/notes/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title: updates.title, content: updates.content }),
+    });
+  };
+
+  const handleDeleteNote = async (id: string) => {
+    deleteNote(id);
+    await fetch(`/api/notes/${id}`, { method: 'DELETE' });
+  };
+
   const handleSelectPaper = (paper: Paper) => {
     setCurrentPaper(paper);
     setActiveView('library');
     setAnalyzeError(null);
-    loadNotesForPaper(paper.id);
     setPdfPanelOpen(false);
     setSidebarMobileOpen(false);
   };
@@ -191,7 +225,6 @@ export default function Home() {
       const remaining = papers.filter((p) => p.id !== paperId);
       if (remaining.length > 0) {
         setCurrentPaper(remaining[0]);
-        loadNotesForPaper(remaining[0].id);
       } else {
         setCurrentPaper(null);
         setActiveView('digest');
@@ -336,7 +369,6 @@ export default function Home() {
       setActiveView('library');
       setSelectedFile(null);
       setUploadCount((c) => c + 1);
-      loadNotesForPaper(paper.id);
       return null;
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Unknown error';
@@ -388,7 +420,6 @@ export default function Home() {
     setPaperCount((c) => c + 1);
     setCurrentPaper(paper);
     setActiveView('library');
-    loadNotesForPaper(paper.id);
   };
 
   // Library → digest a paper that was saved earlier without digesting
@@ -701,9 +732,9 @@ export default function Home() {
                     <NotesTab
                       paperId={currentPaper.id}
                       notes={notes}
-                      onAddNote={addNote}
-                      onUpdateNote={updateNote}
-                      onDeleteNote={deleteNote}
+                      onAddNote={handleAddNote}
+                      onUpdateNote={handleUpdateNote}
+                      onDeleteNote={handleDeleteNote}
                     />
                   </TabsContent>
                 </Tabs>
