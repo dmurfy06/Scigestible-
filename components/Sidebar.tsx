@@ -835,6 +835,16 @@ export function Sidebar({
             <span>Privacy Policy</span>
           </a>
 
+          <a
+            href="/terms"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-slate-500 hover:text-slate-300 hover:bg-white/5 transition-all duration-150 text-xs font-medium"
+          >
+            <ShieldCheck size={14} className="flex-shrink-0" />
+            <span>Terms of Service</span>
+          </a>
+
           <div className="flex items-center gap-2 px-1">
             <div className="w-7 h-7 rounded-full bg-gradient-to-br from-blue-500 to-violet-600 flex items-center justify-center flex-shrink-0">
               <span className="text-xs font-semibold text-white">

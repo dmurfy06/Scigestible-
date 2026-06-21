@@ -39,3 +39,4 @@ tsconfig.tsbuildinfo
 .idea
 *.swp
 *.swo
+.vercel

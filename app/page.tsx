@@ -300,6 +300,9 @@ export default function LandingPage() {
               <Link href="/privacy" className="hover:text-slate-300 transition-colors">
                 Privacy
               </Link>
+              <Link href="/terms" className="hover:text-slate-300 transition-colors">
+                Terms
+              </Link>
             </nav>
             <p className="text-xs text-slate-600">
               © {new Date().getFullYear()} Scigestible
