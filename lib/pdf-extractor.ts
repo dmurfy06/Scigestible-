@@ -25,12 +25,29 @@ export async function extractTextFromPDF(file: File): Promise<PDFExtractionResul
     for (let i = 1; i <= pageCount; i++) {
       const page = await pdf.getPage(i);
       const content = await page.getTextContent();
-      const pageText = content.items
-        .map((item) => ('str' in item ? item.str : ''))
-        .join(' ');
+
+      // Rebuild line structure instead of flattening everything to spaces:
+      // pdf.js marks the end of a visual line with `hasEOL`, which lets the
+      // model see section headings, list items, references, and table rows as
+      // distinct lines rather than one run-on blob.
+      let pageText = '';
+      for (const item of content.items) {
+        if (!('str' in item)) continue;
+        pageText += item.str;
+        pageText += item.hasEOL ? '\n' : ' ';
+      }
+
+      pageText = pageText
+        .replace(/[ \t]+/g, ' ')      // collapse runs of spaces
+        .replace(/ *\n */g, '\n')     // trim around line breaks
+        .replace(/\n{3,}/g, '\n\n')   // cap blank-line runs
+        .trim();
+
       pageTexts.push(pageText);
     }
 
+    // Blank line between pages gives the server a clean boundary to chunk on
+    // for long papers, without polluting the text with sentinels.
     const text = pageTexts.join('\n\n').trim();
 
     if (!text) {
